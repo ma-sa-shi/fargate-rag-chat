@@ -5,3 +5,6 @@
 /src/frontend/public/uploads/*
 !/src/frontend/public/uploads/.gitkeep
 /src/frontend/node_modules/
+
+# GitHub Issues 起票用のローカル下書き
+/docs/issues/
