@@ -7,5 +7,4 @@ node_modules
 .cdk.staging
 cdk.out
 
-README.md
 AGENTS.md
