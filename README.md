@@ -82,17 +82,24 @@ docker compose up --build
 - バックエンドAPI: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
 
-起動確認は`/api/system/health`、`/api/system/db-test`、`/api/system/chroma-test`で行う。いずれも`{"status":"success"}`を返せば起動は完了しているが、APIキーの妥当性は取込・チャットの実行時にしか検証されない。
+起動確認は`/api/system/health`、`/api/system/db-test`、`/api/system/chroma-test`で行う。いずれも`{"status":"success"}`を返せば起動は完了している。`chroma-test`は検索クエリのEmbedding生成を伴うため、OpenAIのAPIキーもここで検証される。Cohereのキーはチャットを実行するまで検証されない。
+
+静的解析はホストで実行する。
 
 ```bash
-cd src/backend  && poetry run ruff check . && poetry run pytest
-cd src/frontend && npm run lint && npm run format:check
+(cd src/backend && poetry run ruff check . && poetry run ruff format --check .)
+(cd src/frontend && npm run lint && npm run format:check)
 ```
 
-`pytest`は`tests/test_documents.py`と`tests/test_chats.py`で取込からチャットまでを通しで検証する。モックを使わないため実際のOpenAI/CohereのAPIキーと、`<MYSQL_DATABASE>_test`データベースが必要になる。フロントエンドにテストフレームワークは導入していない。
+テストは`backend`コンテナの中で実行する。ホストからでは`src/backend`が`sys.path`に載らず、`MYSQL_HOST=rdb`も解決できない。
 
-CDKは`cd cdk && npm install`を一度実行したうえで`npm run diff` / `npm run deploy`を使う。CDKのテストは雛形のまま未実装のため、変更の安全確認は`npm run diff`で行う。
+```bash
+docker compose exec -e PYTHONPATH=. backend poetry run pytest
+```
 
+`tests/test_documents.py`と`tests/test_chats.py`が取込からチャットまでを通しで検証する。モックを使わないため、実際のOpenAI/CohereのAPIキーと`<MYSQL_DATABASE>_test`データベースが必要になる。フロントエンドにテストフレームワークは導入していない。
+
+CDKは`cd cdk && npm ci`を一度実行したうえで`npm run diff` / `npm run deploy`を使う。CDKのテストは雛形のまま未実装のため、変更の安全確認は`npm run diff`で行う。
 
 ## リポジトリ構成
 

@@ -1,41 +1,56 @@
 # ai_app CDK infrastructure
 
-`cdk.json` は、CDK Toolkit にこのアプリの実行方法を指示するファイル。
+ai_appのAWSインフラをTypeScriptのCDKで定義する。スタックの構成と、デプロイに使うnpm scriptsを記載する。デプロイ手順と安全確認のルールは`.claude/skills/cdk-deploy/`にある。
 
 ## 環境
 
-この CDK アプリは **single-stage** 構成である。AWS アカウント1つ、リージョン1つ、スタック一式のみ。
-依存グラフは `VpcStack → {EfsStack, RdsStack, S3Stack}（並列） → EcsStack`。
-`IamStack` は完全に独立しており、任意のタイミングでデプロイされる。`EcsStack` の後段では**ない**。
+このCDKアプリはsingle-stage構成である。AWSアカウント1つ、リージョン1つ、スタック一式のみ。
+依存グラフは`VpcStack → {EfsStack, RdsStack, S3Stack}(並列) → EcsStack`。
+`IamStack`は完全に独立しており、任意のタイミングでデプロイされる。`EcsStack`の後段ではない。
 
-dev/prod の分割は無く、`npm run deploy` は常に同一環境を対象とする。
-CI（`.github/workflows/deploy-infra.yml`）も同じ方法でデプロイし、`workflow_dispatch` による手動トリガーで、単一の `AWS_ACCOUNT_ID`/`AWS_REGION` を使用する。
+dev/prodの分割は無く、`npm run deploy`は常に同一環境を対象とする。
+CI(`.github/workflows/deploy-infra.yml`)は`npx cdk diff --all`のあと`npx cdk deploy --all --require-approval never`を実行する。トリガーは`workflow_dispatch`による手動のみで、アカウントとリージョンはOIDCで引き受けたロールから決まる。
+
+## デプロイ前に必要なもの
+
+`EcsStack`はSSM Parameter StoreのSecureStringを作成せず、既存のものを参照する。次の5件が事前に存在しないと初回デプロイが失敗する。
+
+| パラメータ名 | 用途 |
+|---|---|
+| `/rag-app/database/password` | アプリ用MySQLユーザーのパスワード |
+| `/rag-app/api/openai_key` | OpenAI APIキー |
+| `/rag-app/api/cohere_key` | Cohere APIキー |
+| `/rag-app/jwt_secret` | JWT署名鍵 |
+| `/rag-app/cloudflare/tunnel_token` | Cloudflare Tunnelのトークン |
+
+RDSのマスター認証情報だけは`RdsStack`がSecrets Managerに自動生成する。
 
 ## アーキテクチャ
 
-`cdk/lib/` の6スタックが構築するリソース。
+`cdk/lib/`の6スタックが構築するリソース。見出しはクラス名で、括弧内がCDKに渡すスタックIDである。`IamStack`だけ`Rag`接頭辞が付かない。
 
-- **VpcStack** — 2 AZ にまたがる `10.0.0.0/24` の VPC。各 AZ に public サブネットと `PRIVATE_ISOLATED` サブネットを1つずつ持つ。ネットワークを必要とする他の全スタックがこの VPC を受け取る。
-- **EcsStack** — Fargate SPOT のサービス `rag-app-fastapi`（port 8000）と `rag-app-nextjs`（port 3000）。Next.js は ECS Service Connect 経由で `http://fastapi:8000` から FastAPI にアクセスする。
-  スケジュールされた Auto Scaling により平日9時〜19時（JST）のみ稼働し、時間外は0にスケールする。デプロイでスケーリング状態が巻き戻らないよう、`DesiredCount` は CloudFormation テンプレートから意図的に削除している。
-  タスクのイメージは ECR から取得され、デプロイ用ワークフローによって差し替えられる。CDK テンプレートが持つのはプレースホルダのイメージのみ。
-  Next.js タスク内の `cloudflared` サイドカーがアウトバウンドのトンネルを確立する為、ALB もインバウンドポートも無しでフロントエンドに到達できる。
-- **EfsStack** — `/chroma` をルートとするアクセスポイント（UID/GID 1000）。FastAPI タスクの `/data` にマウントされる。Chroma は `/data/chromadb`（`PERSIST_DIRECTORY`）に永続化する。
-- **RdsStack** — isolated サブネットに置く MySQL 8.4（`db.t4g.micro`）。マスター認証情報は Secrets Manager に格納する。
-- **S3Stack** — アップロードされた文書の保管先。gateway VPC endpoint 経由でアクセスする為、通信は VPC の外に出ない。
-- **IamStack** — GitHub OIDC プロバイダと、CI/CD が assume する2つのロール（`github-actions-cdk-deploy-role`、`github-actions-app-deploy-role`）。
+- **VpcStack**(`RagVpcStack`) — 2 AZにまたがる`10.0.0.0/24`のVPC。各AZにpublicサブネットと`PRIVATE_ISOLATED`サブネットを1つずつ持つ。ネットワークを必要とする他の全スタックがこのVPCを受け取る。
+- **EcsStack**(`RagEcsStack`) — クラスタ`rag-app-cluster`と、Fargate SPOTのサービス`rag-app-fastapi`(port 8000)、`rag-app-nextjs`(port 3000)。Next.jsはECS Service Connect経由で`http://fastapi:8000`からFastAPIにアクセスする。ECRリポジトリ`rag-app-backend` / `rag-app-frontend`もこのスタックが作る。
+  スケジュールされたAuto Scalingにより平日9時から19時(JST)のみ稼働し、時間外は0にスケールする。デプロイでスケーリング状態が巻き戻らないよう、`DesiredCount`はCloudFormationテンプレートから意図的に削除している。
+  タスクのイメージはデプロイ用ワークフローが差し替える。CDKテンプレートが持つのはプレースホルダのイメージのみ。
+  Next.jsタスク内の`cloudflared`サイドカーがアウトバウンドのトンネルを確立するため、ALBもインバウンドポートも無しでフロントエンドに到達できる。
+- **EfsStack**(`RagEfsStack`) — `/chroma`をルートとするアクセスポイント(UID/GID 1000)。FastAPIタスクの`/data`にマウントされる。Chromaは`/data/chromadb`(`PERSIST_DIRECTORY`)に永続化する。
+- **RdsStack**(`RagRdsStack`) — isolatedサブネットに置くMySQL 8.4(`db.t4g.micro`)。マスター認証情報はSecrets Managerに格納する。
+- **S3Stack**(`RagS3Stack`) — アップロードされたドキュメントの保管先。gateway VPC endpoint経由でアクセスするため、通信はVPCの外に出ない。
+- **IamStack**(`IamStack`) — GitHub OIDCプロバイダと、CI/CDがassumeする2つのロール(`github-actions-cdk-deploy-role`、`github-actions-app-deploy-role`)。
 
-実行時のシークレット（API キー、JWT シークレット、DB パスワード、トンネルトークン）は `.env` からではなく、SSM Parameter Store と Secrets Manager から ECS タスク定義に注入される。
+NAT Gatewayは使用しない。タスクはpublicサブネットでパブリックIPを付与して起動し、OpenAI/Cohere APIへのegressを確保する。
 
-NAT Gateway は使用しない。タスクは public サブネットでパブリック IP を付与して起動し、OpenAI/Cohere API への egress を確保する。
-
-図は `docs/diagrams/architecture.drawio` を参照。
+図はリポジトリルートの`docs/diagrams/architecture.drawio`を参照。
 
 ## コマンド
 
-* `npm run build`   TypeScript を JavaScript にコンパイルする
+初回、および依存を更新したときは`npm ci`を先に実行する。CDK CLIはdevDependencyなので、これを省くとnpm scriptsが動かない。
+
+* `npm run build`   TypeScriptをJavaScriptにコンパイルする
 * `npm run watch`   変更を監視してコンパイルする
-* `npm run test`    スタブのみ。`test/cdk.test.ts` はコメントアウトされたサンプルであり、インフラ変更の安全性は何も保証しない。安全確認には `npm run diff` を使うこと（`.claude/skills/cdk-deploy/SKILL.md` を参照）
+* `npm run test`    スタブのみ。`test/cdk.test.ts`はコメントアウトされたサンプルであり、インフラ変更の安全性は何も保証しない。安全確認には`npm run diff`を使うこと
 * `npm run diff`    デプロイ済みスタックとの差分を確認する
-* `npm run deploy`  全スタックをデプロイする
+* `npm run bootstrap` 新規アカウントのCDKブートストラップ。初回のみ
+* `npm run deploy`  全スタックをデプロイする。`--require-approval never`を付けていないため、IAMやセキュリティグループの変更では対話的な確認を求められる
 * `npm run destroy` 全スタックを削除する
