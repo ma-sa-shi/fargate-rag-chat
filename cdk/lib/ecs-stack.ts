@@ -205,7 +205,7 @@ export class EcsStack extends cdk.Stack {
       image: dummyImage,
       essential: true,
       environment: {
-        ENV: 'production',
+        ENV: 'prod',
         PYTHONUNBUFFERED: '1',
         MYSQL_HOST: props.dbInstance.dbInstanceEndpointAddress,
         MYSQL_PORT: props.dbInstance.dbInstanceEndpointPort,
