@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RAG-based internal knowledge search platform. Users upload documents → embeddings stored in Chroma → SSE-streamed Q&A via a Self-RAG (LangGraph) pipeline. Stack: Next.js 16 frontend, FastAPI backend, MySQL 8.4, Chroma vector DB, deployed on AWS ECS Fargate via CDK.
+RAG-based internal knowledge search platform. Users upload documents → embeddings stored in Chroma → SSE-streamed Q&A via a Self-RAG (LangGraph) pipeline.
+
+Stack: Next.js 16 frontend, FastAPI backend, MySQL 8.4, Chroma vector DB, deployed on AWS ECS Fargate via CDK.
 
 Use the `run` and `verify` Skills for local startup and end-to-end verification.
 
@@ -49,7 +51,7 @@ grade_answer_node       → evaluate: "useful" | "useless" | "hallucination"
   └─ retry_count >= 1 → analyze_failure_node → END
 ```
 
-Key files: `workflows.py` (StateGraph), `nodes.py` (node implementations), `chains.py` (LLM chains), `prompts.py` (Japanese prompts).
+Key files: `workflows.py` (StateGraph), `nodes.py` (node implementations), `chains.py` (LLM chains), `prompts.py` (Japanese prompts), `schemas.py` (`GraphState` + structured-output models), `utils.py` (RRF fusion), `repository.py` (persistence).
 
 See `src/backend/services/rag/CLAUDE.md` for the state-accumulation contract (retry history is appended, not overwritten — nodes must index `[-1]`/`[0]` correctly) and other non-obvious details of this pipeline.
 
@@ -58,8 +60,8 @@ See `src/backend/services/rag/CLAUDE.md` for the state-accumulation contract (re
 - `app/` — Next.js App Router pages and API routes
 - `app/api/chat-stream/route.ts` — proxies SSE from FastAPI to browser
 - `app/actions/` — Server Actions for auth and file uploads
-- `components/features/rag/ChatConsole.tsx` — SSE consumer, renders workflow progress in real-time
-- `lib/` — utilities: `auth.ts` (JWT), `db.ts` (MySQL for Server Actions), `file.ts` (S3), `env.ts`, `logger.ts`
+- `components/features/rag/` — `ChatConsole.tsx` (SSE consumer, renders workflow progress in real-time), `ChatHistory.tsx` (client-side history list with filters)
+- `lib/` — utilities: `auth.ts` (JWT), `db.ts` (MySQL for Server Actions), `file.ts` (S3), `chat.ts` (history queries), `chatFilter.ts` (history filtering), `env.ts`, `logger.ts`
 
 ### Backend Structure (`src/backend/`)
 
@@ -94,6 +96,11 @@ In production, secrets are injected from AWS SSM Parameter Store into ECS task d
 
 Copy `.env.example` to `.env` and fill in real values for local development.
 
+## Documentation (`docs/`)
+
+- `docs/adr/` — Architecture Decision Records (`001-compute-architecture.md`). Record significant architecture or infrastructure decisions as a new numbered ADR here, not only in the PR description.
+- `docs/diagrams/` — `architecture.drawio` is the source (draw.io, 4 pages); each page is exported as an SVG alongside it. Edit the `.drawio` and re-export the SVGs; never edit an SVG directly.
+
 ## Common Commands
 
 Backend (`src/backend/`, Poetry):
@@ -106,6 +113,18 @@ Frontend (`src/frontend/`, npm):
 - No `typecheck` or `test` script exists (no jest/vitest/playwright).
 
 CI (GitHub Actions): PRs to `main` run `backend.yml` (Ruff + pytest with a MySQL service) and `frontend.yml` (ESLint + Prettier), path-filtered to `src/backend/**` / `src/frontend/**`. All deploy workflows are manual (`workflow_dispatch`).
+
+## Git and PR Conventions
+
+- Branch names are `<type>/<kebab-slug>` (e.g. `fix/chat-stream-header-validation`, `docs/adr-001-compute-architecture`).
+- Conventional Commits with a scope: `fix(backend):`, `docs(adr):`, `chore(cdk):`, `refactor(frontend):`. Scopes in use: `backend`, `frontend`, `cdk`, `ci`, `devcontainer`, `adr`, `claude`, `diagrams`.
+- Commit messages are English: subject line, then one sentence stating what changed, then one bullet per change.
+- Never add a `Co-Authored-By: Claude` trailer to a commit, or a Claude Code footer to a PR body.
+- PR bodies are Japanese, structured as 概要 / 変更内容 / 影響 / 確認したこと / 残作業.
+- `docs/issues/` holds Japanese drafts for GitHub Issues. It is gitignored — never commit it or cite it from a PR body; the user files the actual issue.
+- Anything touching `src/`, `cdk/`, or `.github/` lands on `main` through a pull request — no direct pushes.
+- Documentation-only changes that cannot affect the build may be committed to `main` directly: renames or moves with no content change, typo and wording fixes.
+- Run the `ci-check` skill before opening a PR.
 
 ## Claude Code Skills
 
