@@ -95,7 +95,18 @@ to `.env` and fill in real values — that file documents every variable. Backen
 are typed in `src/backend/config.py`. In production these come from SSM Parameter Store
 and Secrets Manager instead, injected into the ECS task definitions.
 
-## Documentation (`docs/`)
+## Documentation
+
+Docs are split by audience, and the language follows the split:
+
+- **For people, in Japanese** — `README.md`, `docs/**`, `cdk/README.md`, `.env.example`.
+  These own the facts: what exists, and why it was chosen.
+- **For Claude, in English** — every `CLAUDE.md` and `.claude/skills/**`. These own the
+  contracts that are easy to break while editing, and the procedures to run.
+
+Keep each fact in one place. When a skill or a `CLAUDE.md` needs a fact a human-facing
+doc already states, link to it rather than restating it — the restatement is what goes
+stale.
 
 - Record significant architecture or infrastructure decisions as a new numbered ADR in
   `docs/adr/`, not only in the PR description.

@@ -13,7 +13,7 @@ CI is path-filtered. Run only the suites whose paths the change touches:
 
 - `src/backend/**` (or `.github/workflows/backend.yml`) → backend checks
 - `src/frontend/**` (or `.github/workflows/frontend.yml`) → frontend checks
-- `cdk/**` → **no PR CI exists**. `npm test` in `cdk/` is an empty stub and proves nothing — `npm run diff` is the only safety signal (see the `cdk-deploy` skill).
+- `cdk/**` → **no PR CI exists**, and `npm test` proves nothing. `npm run diff` is the only safety signal (see the `cdk-deploy` skill).
 
 ## Backend (mirrors `backend.yml`)
 
@@ -27,11 +27,11 @@ poetry run pytest
 
 Fix format failures with `poetry run ruff format .` (without `--check`).
 
-pytest prerequisites (same as the `verify` skill's pytest section):
+pytest prerequisites are listed in the `verify` skill's pytest section — real API keys,
+a reachable `<MYSQL_DATABASE>_test` database. Check them there before running.
 
-- Real `OPENAI_API_KEY` / `COHERE_API_KEY` in `.env` — nothing is mocked.
-- A reachable MySQL with the `<MYSQL_DATABASE>_test` database. Locally this means the `rdb` compose container is up (the `run` skill) — `init_db.py` creates the test DB on backend startup, or run `poetry run python init_db.py` manually.
-- Tests make live OpenAI/Cohere calls, so they take a while and cost tokens. If only docs or non-Python files changed, lint alone is enough.
+Tests make live OpenAI/Cohere calls, so they take a while and cost tokens. If only docs
+or non-Python files changed, lint alone is enough.
 
 ## Frontend (mirrors `frontend.yml`)
 

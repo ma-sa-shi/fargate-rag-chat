@@ -38,24 +38,15 @@ The first startup can take several minutes because the backend container install
 
 ## Required environment
 
-Both services share a single repository-root `.env`. If it is missing, copy `.env.example` and have the user fill in real values.
+Backend, frontend, and MySQL share a single repository-root `.env`. If it is missing,
+copy `.env.example` and have the user fill in real values.
 
-Required variables include:
+`.env.example` is the inventory: every uncommented line in it is required locally, and
+the commented blocks are optional overrides and deploy-only variables. Compare `.env`
+against it rather than against a list kept here.
 
-- `MYSQL_HOST`
-- `MYSQL_PORT`
-- `MYSQL_ROOT_PASSWORD`
-- `MYSQL_DATABASE`
-- `MYSQL_USER`
-- `MYSQL_PASSWORD`
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `PERSIST_DIRECTORY`
-- `OPENAI_API_KEY`
-- `COHERE_API_KEY`
-- `FASTAPI_URL`
-
-If required values are missing or obviously placeholders, stop and ask the user instead of inventing credentials or API keys.
+If required values are missing or obviously placeholders, stop and ask the user instead
+of inventing credentials or API keys.
 
 ---
 

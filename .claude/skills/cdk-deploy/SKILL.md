@@ -25,32 +25,20 @@ Never:
 
 ## Single-stage environment
 
-This project has a single AWS account and region.
-There is no dev/staging environment. Every `npm run deploy` targets the same real infrastructure.
-Treat every infrastructure change as production-impacting.
+There is no dev/staging environment. Every `npm run deploy` targets the same real
+infrastructure, so treat every change as production-impacting.
 
 ---
 
 ## Stack dependencies
 
-The deployment dependency graph is:
+`cdk/README.md` has the dependency graph. What it means for deploying:
 
-```text
-VpcStack
-    ├── EfsStack
-    ├── RdsStack
-    └── S3Stack
-            │
-            ▼
-         EcsStack
-```
-
-`VpcStack` must deploy first.
-`EfsStack`, `RdsStack`, and `S3Stack` depend only on `VpcStack` and may deploy in any order.
-`EcsStack` depends on all three and deploys last.
-`IamStack` is completely independent. `cdk deploy --all` may deploy it anywhere in the dependency graph.
-Never assume `IamStack` deploys after `EcsStack`.
-Unless you've confirmed there is no dependency impact, deploy using `cdk deploy --all` rather than selecting stacks manually.
+`VpcStack` first, then `EfsStack`/`RdsStack`/`S3Stack` in any order, then `EcsStack`.
+`IamStack` is independent — `cdk deploy --all` may place it anywhere in the graph, so
+never assume it deploys after `EcsStack`.
+Unless you've confirmed there is no dependency impact, deploy using `cdk deploy --all`
+rather than selecting stacks manually.
 
 ---
 
@@ -76,8 +64,8 @@ Infrastructure changes can affect:
 
 ## CDK tests
 
-Do not rely on `npm test` when evaluating infrastructure changes.
-`cdk/test/` only contains a stale commented example. Passing tests are **not** evidence that an infrastructure change is safe.
+Do not rely on `npm test` when evaluating infrastructure changes — `cdk/test/` is a
+commented-out example. Passing tests are **not** evidence that a change is safe.
 Always use the CDK diff as the safety signal.
 
 ---
@@ -86,10 +74,10 @@ Always use the CDK diff as the safety signal.
 
 If changes affect `EcsStack` or `EfsStack`:
 
-- Verify the container still runs as UID 1000.
-- Verify the EFS access point configuration remains compatible.
-- Warn the user if either changes.
-  The EFS access point is pinned to UID 1000 and rooted at `/chroma` on the EFS side; the backend container mounts it at `/data`, and Chroma persists to `/data/chromadb` (`PERSIST_DIRECTORY`). UID, access point, or mount path changes can silently break persistence.
+- Verify the container still runs as UID 1000 and the access point configuration is
+  unchanged — see the UID coupling section in `cdk/CLAUDE.md`.
+- Warn the user if either changes. The failure is silent at deploy time and only
+  surfaces when a document is ingested.
 
 ---
 
