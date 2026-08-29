@@ -20,15 +20,6 @@ OpenNextは、Next.jsをLambdaで実行する為に採用する。
 
 B案では、外部API(OpenAI/Cohere)向けegressにNAT Gateway(固定費 $0.062/時 × 730時間 = $45.26/月)を採用せず、NATインスタンス化・arm64化・メモリ削減でコストを最適化する。
 
-A案(現行)
-![A案(現行)](../../img/architecture-current.png)
-
-B案(Lambda移植)
-![B案(Lambda移植)](../../img/architecture-lambda-port.png)
-
-C案(再設計)
-![C案(再設計)](../../img/architecture-serverless.png)
-
 ## 試算
 
 ### 前提条件
