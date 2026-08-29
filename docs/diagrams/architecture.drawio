@@ -1,5 +1,5 @@
 <mxfile host="app.diagrams.net" pages="4">
-  <diagram name="アプリケーション構成" id="kGCPw12K_-m1OE7OgMJp">
+  <diagram name="アプリ設計" id="kGCPw12K_-m1OE7OgMJp">
     <mxGraphModel dx="1459" dy="1008" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1250" background="#ffffff" math="0" shadow="0">
       <root>
         <mxCell id="0" />
@@ -176,7 +176,7 @@
       </root>
     </mxGraphModel>
   </diagram>
-  <diagram name="ドキュメント取込パイプライン" id="fp35oGXvZlnnUEpe06k5">
+  <diagram name="取込パイプライン" id="fp35oGXvZlnnUEpe06k5">
     <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1700" pageHeight="800" background="#ffffff" math="0" shadow="0">
       <root>
         <mxCell id="0" />
@@ -467,7 +467,7 @@
       </root>
     </mxGraphModel>
   </diagram>
-  <diagram name="CI/CD" id="N3cGP8566HekMxPYHYgA">
+  <diagram name="CICD" id="N3cGP8566HekMxPYHYgA">
     <mxGraphModel dx="497" dy="344" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1180" background="#ffffff" math="0" shadow="0">
       <root>
         <mxCell id="0" />
