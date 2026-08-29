@@ -32,9 +32,9 @@ Browser → Next.js Route Handler (/api/chat-stream)
 ```
 Browser → Next.js Server Action (file-actions.ts)
   → uploads file, extracts text, saves to MySQL (status: uploaded)
-  → FastAPI POST /api/documents/{id}/embeddings
+  → marks the row `processing`, then FastAPI POST /api/documents/{id}/embeddings
   → splits text → OpenAI embeddings → stored in Chroma
-  → updates MySQL (status: ingested)
+  → updates MySQL (status: ingested, or failed)
 ```
 
 **Auth**: Server Actions validate credentials against MySQL, hash passwords with argon2, issue JWT set in an httpOnly `session_token` cookie. `getUserIdFromToken()` in `lib/auth.ts` guards every protected page.
@@ -57,49 +57,50 @@ See `src/backend/services/rag/CLAUDE.md` for the state-accumulation contract (re
 
 ### Frontend Structure (`src/frontend/`)
 
-- `app/` — Next.js App Router pages and API routes
-- `app/api/chat-stream/route.ts` — proxies SSE from FastAPI to browser
-- `app/actions/` — Server Actions for auth and file uploads
-- `components/features/rag/` — `ChatConsole.tsx` (SSE consumer, renders workflow progress in real-time), `ChatHistory.tsx` (client-side history list with filters)
-- `lib/` — utilities: `auth.ts` (JWT), `db.ts` (MySQL for Server Actions), `file.ts` (S3), `chat.ts` (history queries), `chatFilter.ts` (history filtering), `env.ts`, `logger.ts`
+- `app/api/chat-stream/route.ts` — validates the JWT cookie, then proxies the SSE stream
+  from FastAPI straight through to the browser.
+- `app/actions/` — Server Actions for auth and file upload. They reach MySQL and S3
+  directly, so the frontend is not a pure BFF over FastAPI.
+- `components/features/rag/ChatConsole.tsx` — consumes the SSE stream and renders each
+  workflow node's progress live.
+- `lib/` — `auth.ts` (JWT), `db.ts` (MySQL pool for Server Actions), `file.ts` (S3 +
+  the ingest call), `chat.ts` / `chatFilter.ts` (history).
 
 ### Backend Structure (`src/backend/`)
 
-- `main.py` — FastAPI app; initializes MySQL pool, Chroma client, Cohere reranker via lifespan
-- `api/endpoints/` — `chats.py` (streaming), `documents.py` (ingestion), `deps.py` (DI)
-- `services/rag/` — LangGraph workflow (see above)
-- `core/chroma.py` — document chunking (500 chars / 50 overlap) → OpenAI embeddings → Chroma
-- `tests/` — Pytest integration tests for chat/document APIs
-- `init_db.py` — creates tables: `users`, `docs`, `chat_histories`, `chat_details`
-- `config.py` — Pydantic settings (env vars)
+- `main.py` — FastAPI app. The lifespan handler builds the MySQL pool, Chroma client, and
+  Cohere reranker on `app.state`. `chats.py` hands the retriever and reranker to the RAG
+  nodes through `RunnableConfig`; the pool reaches persistence through the `Request` object.
+- `api/endpoints/` — `chats.py` (SSE streaming), `documents.py` (ingestion), `system.py`
+  (`health` / `db-test` / `chroma-test`, used by the `run` skill), `deps.py` (DI).
+- `services/rag/` — the LangGraph workflow (see above).
+- `core/chroma.py` — chunking (500 chars / 50 overlap) → OpenAI embeddings → Chroma.
+- `init_db.py` — creates `users`, `docs`, `chat_histories`, `chat_details`; runs on startup.
 
 ### AWS Infrastructure (`cdk/`)
 
-Six CDK stacks in `cdk/lib/`. Dependency-driven order: `VpcStack` first (everything else needs its VPC) → `EfsStack`/`RdsStack`/`S3Stack` (each only depends on the VPC) → `EcsStack` last (depends on all three). `IamStack` has no dependency on any other stack and may deploy at any point in the dependency graph.
+Six CDK stacks in `cdk/lib/`; see `cdk/README.md` for the stack graph and what each one
+provisions, and `cdk/CLAUDE.md` before editing anything under `cdk/`. Two facts matter
+outside infrastructure work:
 
-- **ECS Fargate**: backend (port 8000) + frontend (port 3000), Fargate SPOT
-- **Cloudflare Tunnel**: sidecar container exposes the frontend
-- **EFS**: access point rooted at `/chroma` (UID 1000), mounted at `/data` inside the backend container; Chroma persists to `/data/chromadb` (`PERSIST_DIRECTORY`)
-- **RDS MySQL 8.4**: isolated subnet, credentials in Secrets Manager
-- **GitHub OIDC**: `IamStack` provisions the OIDC provider for CI/CD assume-role
+- Chroma persists to `/data/chromadb` on EFS in production (`PERSIST_DIRECTORY`), so
+  vector data survives task replacement but is not shared with your local `./chroma_db`.
+- Both services run Mon–Fri 09:00–19:00 JST on scheduled auto scaling and are scaled to
+  zero outside that window, so a deployed environment is normally down at night.
 
 ### Environment Variables
 
-Both services share a single `.env` at repo root for local Docker Compose. Key variables:
-- `OPENAI_API_KEY`, `COHERE_API_KEY` — LLM/reranking
-- `JWT_SECRET` — token signing
-- `MYSQL_*` / `DATABASE_URL` — database connection
-- `FASTAPI_URL` — backend URL used by Next.js Server Actions (default: `http://backend:8000/api`)
-- `PERSIST_DIRECTORY` — Chroma persistence path (`./chroma_db` locally, EFS-backed in production)
-
-In production, secrets are injected from AWS SSM Parameter Store into ECS task definitions.
-
-Copy `.env.example` to `.env` and fill in real values for local development.
+Backend, frontend, and MySQL share a single `.env` at the repo root. Copy `.env.example`
+to `.env` and fill in real values — that file documents every variable. Backend settings
+are typed in `src/backend/config.py`. In production these come from SSM Parameter Store
+and Secrets Manager instead, injected into the ECS task definitions.
 
 ## Documentation (`docs/`)
 
-- `docs/adr/` — Architecture Decision Records (`001-compute-architecture.md`). Record significant architecture or infrastructure decisions as a new numbered ADR here, not only in the PR description.
-- `docs/diagrams/` — `architecture.drawio` is the source (draw.io, 4 pages); each page is exported as an SVG alongside it. Edit the `.drawio` and re-export the SVGs; never edit an SVG directly.
+- Record significant architecture or infrastructure decisions as a new numbered ADR in
+  `docs/adr/`, not only in the PR description.
+- `docs/diagrams/architecture.drawio` is the source of truth for the diagrams. Edit it and
+  re-export the SVGs beside it; never edit an SVG directly.
 
 ## Common Commands
 
@@ -110,14 +111,15 @@ Backend (`src/backend/`, Poetry):
 Frontend (`src/frontend/`, npm):
 - `npm run lint` — ESLint
 - `npm run format:check` — Prettier
-- No `typecheck` or `test` script exists (no jest/vitest/playwright).
+- There is no `typecheck` or `test` script — do not assume one exists.
 
-CI (GitHub Actions): PRs to `main` run `backend.yml` (Ruff + pytest with a MySQL service) and `frontend.yml` (ESLint + Prettier), path-filtered to `src/backend/**` / `src/frontend/**`. All deploy workflows are manual (`workflow_dispatch`).
+CI runs these same checks on PRs to `main`, path-filtered per service; every deploy
+workflow is manual. Use the `ci-check` skill to reproduce CI locally.
 
 ## Git and PR Conventions
 
 - Branch names are `<type>/<kebab-slug>` (e.g. `fix/chat-stream-header-validation`, `docs/adr-001-compute-architecture`).
-- Conventional Commits with a scope: `fix(backend):`, `docs(adr):`, `chore(cdk):`, `refactor(frontend):`. Scopes in use: `backend`, `frontend`, `cdk`, `ci`, `devcontainer`, `adr`, `claude`, `diagrams`.
+- Conventional Commits with a scope: `fix(backend):`, `docs(adr):`, `chore(cdk):`, `refactor(frontend):`.
 - Commit messages are English: subject line, then one sentence stating what changed, then one bullet per change.
 - Never add a `Co-Authored-By: Claude` trailer to a commit, or a Claude Code footer to a PR body.
 - PR bodies are Japanese, structured as 概要 / 変更内容 / 影響 / 確認したこと / 残作業.
@@ -128,8 +130,9 @@ CI (GitHub Actions): PRs to `main` run `backend.yml` (Ruff + pytest with a MySQL
 
 ## Claude Code Skills
 
-Project-specific skills in `.claude/skills/` (auto-invoked by description match):
-- `run` — bring up the local stack correctly and check real readiness signals via the `/api/system/*` endpoints (`health`, `db-test`, `chroma-test`).
-- `verify` — golden-path E2E check (upload → ingest → chat → SSE → persisted rows), including the retry/hallucination edge case.
-- `cdk-deploy` — diff-before-deploy discipline and stack-order/destroy safety for `cdk/`.
-- `ci-check` — run the same lint/format/test checks as CI locally before pushing or opening a PR.
+Project-specific skills in `.claude/skills/`, auto-invoked by description match:
+
+- `run` — start the local stack and verify readiness.
+- `verify` — run the golden-path E2E flow.
+- `cdk-deploy` — safely diff and deploy CDK stacks.
+- `ci-check` — run the same checks as CI locally.
