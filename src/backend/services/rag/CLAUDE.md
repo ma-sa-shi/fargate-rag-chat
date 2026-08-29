@@ -17,7 +17,9 @@ As a result:
 Use `[-1]` for the current attempt and `[0]` for the initial attempt.
 Mixing them up is the easiest bug to introduce when modifying this pipeline.
 
-`retry_count` is the one exception — it's a plain `int`, not accumulated.
+Two fields a node returns are **not** accumulated: `retry_count` (a plain `int`) and
+`failure_analysis` (a plain `str`, returned by `analyze_failure_node`). Both replace rather
+than append. Adding a reducer-less field to `GraphState` opts it into the same behaviour.
 
 ## Retry limit (`workflows.py`)
 
@@ -28,9 +30,11 @@ Mixing them up is the easiest bug to introduce when modifying this pipeline.
 
 There is exactly **one** retry, ever. Raising this limit means changing the `retry_count == 1` check, not adding a new constant elsewhere.
 
-## Prompts (`prompts.py`)
+## Retry feedback prefix (`nodes.py`)
 
-Retry feedback is passed to the next `generate_queries_node` call as the literal prefix `フィードバック: `. If you change this prefix, also update `nodes.py`, whose logging slices the string assuming that exact prefix.
+`generate_queries_node` prepends the literal `フィードバック: ` to the previous attempt's feedback before it is interpolated into `{feedback}` in `generate_queries_prompt`. `prompts.py` holds only the placeholder — the prefix itself is built in `nodes.py`.
+
+The same function logs `feedback[7:57]` to drop that prefix, and the offset is already two characters short of it. If you change the prefix, fix the slice in the log call as well.
 
 ## Chains (`chains.py`)
 
@@ -39,6 +43,14 @@ Four chains share a single `ChatOpenAI` model:
 - `generate_answer_chain` and `analyze_failure_chain` use `StrOutputParser()` (plain string output).
 
 Changing a structured-output Pydantic model requires updating the corresponding prompt as well.
+
+## Retrieval fusion (`utils.py`)
+
+`reciprocal_rank_fusion` merges the per-query Chroma result lists in `retrieve_contexts_node` before the Cohere rerank. It scores by rank only (`1 / (rank + k)`, `k=60`) and keys on `Document.id`, so it depends on Chroma returning stable ids — it does not compare document text.
+
+Its `top_n=20` default is the cutoff for what reaches the reranker, applied at the call site by omission (`nodes.py` passes neither `k` nor `top_n`).
+
+That cutoff is barely binding today. `chats.py` builds the retriever with `search_kwargs={"k": 5}` and `MultiQuery` produces 3–5 queries, so the fused pool is at most 25 documents before `top_n` trims it, and the Cohere reranker takes `top_n=5` from there. Widening the candidate pool means raising `k` in `chats.py` first; raising `top_n` here alone changes almost nothing.
 
 ## Downstream persistence
 

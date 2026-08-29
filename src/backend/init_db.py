@@ -7,12 +7,16 @@ from pymysql.constants import CLIENT
 MYSQL_HOST = os.environ.get("MYSQL_HOST")
 MYSQL_PORT = os.environ.get("MYSQL_PORT")
 MYSQL_ROOT_PASSWORD = os.environ.get("MYSQL_ROOT_PASSWORD")
+MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
+MYSQL_USER = os.environ.get("MYSQL_USER")
 MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
 
 db_env = {
     "MYSQL_HOST": MYSQL_HOST,
     "MYSQL_PORT": MYSQL_PORT,
     "MYSQL_ROOT_PASSWORD": MYSQL_ROOT_PASSWORD,
+    "MYSQL_DATABASE": MYSQL_DATABASE,
+    "MYSQL_USER": MYSQL_USER,
     "MYSQL_PASSWORD": MYSQL_PASSWORD,
 }
 missing_vars = [k for k, v in db_env.items() if not v]
@@ -25,14 +29,17 @@ if missing_vars:
 
 MYSQL_PORT = int(MYSQL_PORT)
 
+APP_DB = MYSQL_DATABASE
+TEST_DB = f"{MYSQL_DATABASE}_test"
+
 SETUP_SQL = f"""
-CREATE DATABASE IF NOT EXISTS db CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks;
-CREATE DATABASE IF NOT EXISTS db_test CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks;
+CREATE DATABASE IF NOT EXISTS `{APP_DB}` CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks;
+CREATE DATABASE IF NOT EXISTS `{TEST_DB}` CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks;
 
-CREATE USER IF NOT EXISTS 'user'@'%' IDENTIFIED BY '{MYSQL_PASSWORD}';
+CREATE USER IF NOT EXISTS '{MYSQL_USER}'@'%' IDENTIFIED BY '{MYSQL_PASSWORD}';
 
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON db.* TO 'user'@'%';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON db_test.* TO 'user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `{APP_DB}`.* TO '{MYSQL_USER}'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `{TEST_DB}`.* TO '{MYSQL_USER}'@'%';
 FLUSH PRIVILEGES;
 """
 CREATE_TABLES_SQL = """
@@ -122,11 +129,11 @@ def main():
     try:
         with connection.cursor() as cursor:
             cursor.execute(SETUP_SQL)
-            target_dbs = ["db", "db_test"]
+            target_dbs = [APP_DB, TEST_DB]
 
             for target_db in target_dbs:
                 print(f"Creating database: {target_db}")
-                cursor.execute(f"USE {target_db};")
+                cursor.execute(f"USE `{target_db}`;")
                 cursor.execute(CREATE_TABLES_SQL)
 
         print("Migration successfully completed.")

@@ -51,8 +51,9 @@ Confirm:
 
 ## Automated check: pytest
 
-`cd src/backend && poetry run pytest` runs `tests/test_documents.py` and `tests/test_chats.py`, which automate most of the golden path above (ingest → chat → grade), including the retry/`useless`-grade edge case. The same suite also runs in CI (`backend.yml`) on every PR touching `src/backend/**`. Reach for it first after touching `services/rag/{nodes,chains,prompts,workflows}.py` or the `documents`/`chats` endpoints — it's faster than the manual walk-through, but it's a complement, not a replacement:
+`docker compose exec -e PYTHONPATH=. backend poetry run pytest` runs `tests/test_documents.py` and `tests/test_chats.py`, which automate most of the golden path above (ingest → chat → grade), including the retry/`useless`-grade edge case. The same suite also runs in CI (`backend.yml`) on every PR touching `src/backend/**`. Reach for it first after touching `services/rag/{nodes,chains,prompts,workflows}.py` or the `documents`/`chats` endpoints — it's faster than the manual walk-through, but it's a complement, not a replacement:
 
+- It runs inside the `backend` container because it needs the Compose network and the injected environment; see the `ci-check` skill for why the bare `poetry run pytest` fails on the host.
 - It builds its own in-process app (`ASGITransport`) with its own temp Chroma dir, hitting a separate `<MYSQL_DATABASE>_test` database — it does **not** exercise the running docker compose containers, the Next.js `/api/chat-stream` SSE proxy, or the UI.
 - Nothing is mocked — it needs real `OPENAI_API_KEY` / `COHERE_API_KEY`, same as the running app.
 - The `<MYSQL_DATABASE>_test` DB is created by `init_db.py`, which already runs on backend container startup (i.e. it exists once the `run` skill has brought the stack up at least once), or run `poetry run python init_db.py` manually.
