@@ -108,6 +108,10 @@ Docs are split by audience, and the language follows the split:
 - **For Claude, in English** — every `CLAUDE.md` and `.claude/skills/**`. These own the
   contracts that are easy to break while editing, and the procedures to run.
 
+Japanese prose in the human-facing files uses connectives — `そのため`, `一方`, `ただし`,
+`また`, `そこで` — so a section reads as a connected argument rather than a list of
+juxtaposed facts. Half-width brackets, and `ため` rather than `為`.
+
 Keep each fact in one place. When a skill or a `CLAUDE.md` needs a fact a human-facing
 doc already states, link to it rather than restating it — the restatement is what goes
 stale.
