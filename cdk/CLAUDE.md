@@ -26,6 +26,26 @@ time, so a diff will look clean.
 swap the image, and register a new revision. Pointing the CDK construct at a real tag
 means the next `cdk deploy` rolls the service back to that tag.
 
+## Container environment must satisfy `src/backend/config.py`
+
+`config.py` builds `Settings()` at import time, so a value that fails its declared types
+crashes the container before Uvicorn starts. A `cdk deploy` looks clean and the service
+simply never becomes healthy. `ENV` is `Literal["dev", "prod"]` and `MYSQL_PORT` is an
+`int`; check the field in `config.py` before adding or changing anything in an ECS
+container's `environment` block.
+
+`init_db.py` also connects as the MySQL master user, hardcoded as `root`, which has to keep
+matching `username: 'root'` in `rds-stack.ts`. Changing the master username breaks the
+backend at container start, in production only.
+
+## The backend's startup command lives in the deploy workflow
+
+`src/backend/Dockerfile` declares no `CMD`, and `ecs-stack.ts` sets no `command` for the
+FastAPI container. The real one is rendered into the task definition by
+`deploy-backend.yml`: `poetry run python init_db.py && poetry run uvicorn main:app`.
+Changing how the backend starts in production means editing that workflow, not this
+directory.
+
 ## Single-stage: no environment parameterization
 
 One AWS account, one region, no dev/prod split. Do not add environment context switches,

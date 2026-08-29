@@ -72,10 +72,14 @@ See `src/backend/services/rag/CLAUDE.md` for the state-accumulation contract (re
   Cohere reranker on `app.state`. `chats.py` hands the retriever and reranker to the RAG
   nodes through `RunnableConfig`; the pool reaches persistence through the `Request` object.
 - `api/endpoints/` — `chats.py` (SSE streaming), `documents.py` (ingestion), `system.py`
-  (`health` / `db-test` / `chroma-test`, used by the `run` skill), `deps.py` (DI).
+  (`health` / `db-test` / `chroma-test`, used by the `run` skill), `deps.py` (DI). A new
+  endpoint is only reachable once its router is registered in `api.py`.
 - `services/rag/` — the LangGraph workflow (see above).
 - `core/chroma.py` — chunking (500 chars / 50 overlap) → OpenAI embeddings → Chroma.
-- `init_db.py` — creates `users`, `docs`, `chat_histories`, `chat_details`; runs on startup.
+- `init_db.py` — connects as the MySQL master user and creates the `<MYSQL_DATABASE>` and
+  `<MYSQL_DATABASE>_test` databases, the application user and its grants, and the `users`,
+  `docs`, `chat_histories`, `chat_details` tables. It runs on every backend start,
+  production included — the deploy workflow puts it in front of `uvicorn`.
 
 ### AWS Infrastructure (`cdk/`)
 
