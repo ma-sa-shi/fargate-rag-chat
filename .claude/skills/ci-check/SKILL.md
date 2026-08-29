@@ -17,15 +17,26 @@ CI is path-filtered. Run only the suites whose paths the change touches:
 
 ## Backend (mirrors `backend.yml`)
 
-From `src/backend/`, in CI order:
+Ruff runs from `src/backend/` on the host, in CI order:
 
 ```bash
 poetry run ruff check .
 poetry run ruff format --check .
-poetry run pytest
 ```
 
 Fix format failures with `poetry run ruff format .` (without `--check`).
+
+pytest has to run inside the `backend` container:
+
+```bash
+docker compose exec -e PYTHONPATH=. backend poetry run pytest
+```
+
+Three things make the bare `poetry run pytest` fail on the host: `tests/conftest.py` does
+`from main import app` and nothing puts `src/backend` on `sys.path` (CI sets
+`PYTHONPATH: .` for the same reason), `config.py` reads `env_file=".env"` relative to the
+working directory and there is no `src/backend/.env`, and the repository-root `.env` sets
+`MYSQL_HOST=rdb`, which only resolves on the Compose network.
 
 pytest prerequisites are listed in the `verify` skill's pytest section — real API keys,
 a reachable `<MYSQL_DATABASE>_test` database. Check them there before running.

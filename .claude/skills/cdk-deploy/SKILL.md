@@ -40,6 +40,11 @@ never assume it deploys after `EcsStack`.
 Unless you've confirmed there is no dependency impact, deploy using `cdk deploy --all`
 rather than selecting stacks manually.
 
+Those are the TypeScript class names. The ids CDK actually accepts on the command line are
+`RagVpcStack`, `RagEfsStack`, `RagRdsStack`, `RagS3Stack`, `RagEcsStack` and `IamStack` —
+note that `IamStack` alone has no `Rag` prefix. Naming a stack without the prefix fails
+with "no stacks match".
+
 ---
 
 ## Always diff before deploy
@@ -112,9 +117,19 @@ Bootstrap a new environment locally:
 
 ```bash
 cd cdk
+npm ci
 npm run bootstrap
 npm run deploy
 ```
+
+`npm ci` comes first: the CDK CLI is a devDependency, so `npm run bootstrap` has nothing to
+run on a fresh clone.
+
+`npm run deploy` is `cdk deploy --all` with no `--require-approval never`, so any IAM or
+security-group change stops at an interactive confirmation prompt. That prompt cannot be
+answered from a non-interactive session — hand the command to the user rather than letting
+it hang. `deploy-infra.yml` passes `--require-approval never`, which is why CI does not
+hit this.
 
 After the initial bootstrap completes, use GitHub Actions for routine deployments.
 

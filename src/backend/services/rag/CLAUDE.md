@@ -17,7 +17,9 @@ As a result:
 Use `[-1]` for the current attempt and `[0]` for the initial attempt.
 Mixing them up is the easiest bug to introduce when modifying this pipeline.
 
-`retry_count` is the one exception — it's a plain `int`, not accumulated.
+Two fields a node returns are **not** accumulated: `retry_count` (a plain `int`) and
+`failure_analysis` (a plain `str`, returned by `analyze_failure_node`). Both replace rather
+than append. Adding a reducer-less field to `GraphState` opts it into the same behaviour.
 
 ## Retry limit (`workflows.py`)
 
@@ -46,7 +48,9 @@ Changing a structured-output Pydantic model requires updating the corresponding 
 
 `reciprocal_rank_fusion` merges the per-query Chroma result lists in `retrieve_contexts_node` before the Cohere rerank. It scores by rank only (`1 / (rank + k)`, `k=60`) and keys on `Document.id`, so it depends on Chroma returning stable ids — it does not compare document text.
 
-Its `top_n=20` default is the cutoff for what reaches the reranker, and it is applied at the call site by omission (`nodes.py` passes neither `k` nor `top_n`). Widening the candidate pool means changing the default here, not the retriever.
+Its `top_n=20` default is the cutoff for what reaches the reranker, applied at the call site by omission (`nodes.py` passes neither `k` nor `top_n`).
+
+That cutoff is barely binding today. `chats.py` builds the retriever with `search_kwargs={"k": 5}` and `MultiQuery` produces 3–5 queries, so the fused pool is at most 25 documents before `top_n` trims it, and the Cohere reranker takes `top_n=5` from there. Widening the candidate pool means raising `k` in `chats.py` first; raising `top_n` here alone changes almost nothing.
 
 ## Downstream persistence
 

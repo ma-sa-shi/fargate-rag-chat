@@ -116,7 +116,9 @@ stale.
 ## Common Commands
 
 Backend (`src/backend/`, Poetry):
-- `poetry run pytest` — integration tests (needs real API keys and the `<MYSQL_DATABASE>_test` DB; see the `verify` skill)
+- `docker compose exec -e PYTHONPATH=. backend poetry run pytest` — integration tests. They
+  need the Compose network and real API keys, so the bare `poetry run pytest` fails on the
+  host; see the `ci-check` skill
 - `poetry run ruff check .` / `poetry run ruff format --check .` — lint / format check
 
 Frontend (`src/frontend/`, npm):

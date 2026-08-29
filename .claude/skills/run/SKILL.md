@@ -41,9 +41,10 @@ The first startup can take several minutes because the backend container install
 Backend, frontend, and MySQL share a single repository-root `.env`. If it is missing,
 copy `.env.example` and have the user fill in real values.
 
-`.env.example` is the inventory: every uncommented line in it is required locally, and
-the commented blocks are optional overrides and deploy-only variables. Compare `.env`
-against it rather than against a list kept here.
+`.env.example` is the inventory: compare `.env` against it rather than against a list
+kept here. Its uncommented lines are what local startup needs, its commented blocks are
+optional overrides and deploy-only variables, and each entry says when it does not apply —
+`DATABASE_URL`, for instance, is marked as read by no application code.
 
 If required values are missing or obviously placeholders, stop and ask the user instead
 of inventing credentials or API keys.
@@ -98,20 +99,25 @@ Expected:
 {"status":"success",...}
 ```
 
-This confirms the Chroma client initialized, but not that the API keys are valid (see below).
+This issues a `similarity_search`, which embeds the query through OpenAI — so it also
+proves `OPENAI_API_KEY` works. A 500 here is as likely to be a bad key as a broken Chroma
+client. `COHERE_API_KEY` is still unexercised (see below).
 
 5. Frontend
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-http://localhost:3000
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000
 ```
 
 Expected:
 
 ```
-200
+307
 ```
+
+`app/page.tsx` redirects to `/auth` when there is no session cookie, so an unauthenticated
+request returns 307, not 200. A 200 here would mean the redirect guard is gone. Add `-L`
+if you want to follow it to the sign-in page.
 
 6. If startup appears stalled
 
@@ -163,10 +169,12 @@ warn the user that the local MySQL volume will be deleted.
 
 ## API key behavior
 
-Invalid `OPENAI_API_KEY` or `COHERE_API_KEY` does not prevent startup.
+Neither key prevents Uvicorn from starting — the lifespan handler constructs the OpenAI
+and Cohere clients without calling them.
 
-The application only validates those keys during embedding, reranking, or chat requests.
-
-A successful startup is not proof that the API keys are valid.
+`OPENAI_API_KEY` is exercised by the `chroma-test` check above, because the
+`similarity_search` embeds its query. `COHERE_API_KEY` is not exercised until a chat
+request reaches the reranker, so a fully green startup is still not proof that reranking
+works.
 
 Use the `verify` Skill to confirm end-to-end functionality.
