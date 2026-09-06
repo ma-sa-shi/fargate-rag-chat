@@ -37,7 +37,7 @@ dev/prodの分割は無く、`npm run deploy`は常に同一環境を対象と�
 - **EfsStack**(`RagEfsStack`) — `/chroma`をルートとするアクセスポイント(UID/GID 1000)。FastAPIタスクの`/data`にマウントされる。Chromaは`/data/chromadb`(`PERSIST_DIRECTORY`)に永続化する。
 - **RdsStack**(`RagRdsStack`) — isolatedサブネットに置くMySQL 8.4(`db.t4g.micro`)。マスター認証情報はSecrets Managerに格納する。
 - **S3Stack**(`RagS3Stack`) — アップロードされたドキュメントの保管先。gateway VPC endpoint経由でアクセスするため、通信はVPCの外に出ない。
-- **IamStack**(`IamStack`) — GitHub OIDCプロバイダと、CI/CDがassumeする2つのロール(`github-actions-cdk-deploy-role`、`github-actions-app-deploy-role`)。
+- **IamStack**(`IamStack`) — CI/CDがassumeする2つのロール(`github-actions-cdk-deploy-role`、`github-actions-app-deploy-role`)。GitHub OIDCプロバイダは同一URLのものをAWSアカウントに1つしか作成できず、このアカウントでは別アプリのスタックが管理している。そのためこのスタックは新規作成せず、ARNで参照するだけである。
 
 NAT Gatewayは使用しない。代わりにタスクをpublicサブネットでパブリックIPを付与して起動し、OpenAI/Cohere APIへのegressを確保する。
 
