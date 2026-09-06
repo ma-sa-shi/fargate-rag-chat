@@ -484,7 +484,7 @@
         <mxCell id="region" parent="1" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;" value="ap-northeast-1" vertex="1">
           <mxGeometry height="900" width="800" x="790" y="140" as="geometry" />
         </mxCell>
-        <mxCell id="ghgrp" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;dashed=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontColor=#5A6C86;fontSize=12;" value="GitHub Actions (ma-sa-shi/rag_app)" vertex="1">
+        <mxCell id="ghgrp" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;dashed=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontColor=#5A6C86;fontSize=12;" value="GitHub Actions (ma-sa-shi/fargate-rag-chat)" vertex="1">
           <mxGeometry height="730" width="330" x="55" y="110" as="geometry" />
         </mxCell>
         <mxCell id="appgrp" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;dashed=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;fontColor=#5A6C86;fontSize=12;" value="アプリデプロイ (app-deploy-role を使用)" vertex="1">
@@ -532,7 +532,7 @@
         <mxCell id="note-dummy" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;fontColor=#666666;fontSize=11;align=left;spacingLeft=8;verticalAlign=middle;dashed=1;" value="EcsStack のタスク定義はダミーイメージ (public.ecr.aws/nginx) を指すため、実イメージは常に deploy-*.yml が差し替える" vertex="1">
           <mxGeometry height="80" width="400" x="860" y="580" as="geometry" />
         </mxCell>
-        <mxCell id="note-oidc" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;fontColor=#666666;fontSize=11;align=left;spacingLeft=8;verticalAlign=middle;dashed=1;" value="GitHub に AWS のアクセスキーは持たせず、OIDC (sub を repo:ma-sa-shi/rag_app:* に限定) で一時クレデンシャルを取得する。cdk-deploy-role の権限は sts:AssumeRole (cdk-*) のみで、実権限は CDK ブートストラップのロールに委譲している" vertex="1">
+        <mxCell id="note-oidc" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;fontColor=#666666;fontSize=11;align=left;spacingLeft=8;verticalAlign=middle;dashed=1;" value="GitHub に AWS のアクセスキーは持たせず、OIDC (sub を repo:ma-sa-shi/fargate-rag-chat:* に限定) で一時クレデンシャルを取得する。cdk-deploy-role の権限は sts:AssumeRole (cdk-*) のみで、実権限は CDK ブートストラップのロールに委譲している" vertex="1">
           <mxGeometry height="90" width="700" x="860" y="800" as="geometry" />
         </mxCell>
         <mxCell id="c1" edge="1" parent="1" source="infra" style="edgeStyle=orthogonalEdgeStyle;rounded=0;jumpStyle=arc;jumpSize=8;html=1;strokeColor=#232F3E;strokeWidth=1;dashed=1;endArrow=blockThin;endFill=1;fontSize=11;fontColor=#232F3E;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="iam" value="OIDCでAssumeRole&lt;br&gt;(cdk-deploy-role)">

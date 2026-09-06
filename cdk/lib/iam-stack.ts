@@ -25,7 +25,7 @@ export class IamStack extends cdk.Stack {
         },
         StringLike: {
           // 自分のGitHubアカウントの特定のリポジトリのみに制限
-          'token.actions.githubusercontent.com:sub': 'repo:ma-sa-shi/rag_app:*',
+          'token.actions.githubusercontent.com:sub': 'repo:ma-sa-shi/fargate-rag-chat:*',
         },
       }
     );
