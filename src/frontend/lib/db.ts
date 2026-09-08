@@ -21,7 +21,9 @@ export function getPool(): mysql.Pool {
     waitForConnections: true,
     connectionLimit: 3,
     queueLimit: 0,
-    timezone: '+09:00',
+    // MySQLはUTCで返し、表示側のtoLocaleStringでJSTへ変換する。
+    // ここをサーバのtime_zoneとずらすと日時が9時間ずれるため'Z'固定。
+    timezone: 'Z',
   });
 
   // 開発環境(npm run dev)で、ホットリロードによるコード変更の度に新しい接続プール作成を回避

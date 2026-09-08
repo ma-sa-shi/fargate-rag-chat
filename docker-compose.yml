@@ -44,9 +44,10 @@ services:
   rdb:
     image: mysql:8.4
     restart: unless-stopped
-    command: --default-time-zone='+09:00'
+    # 本番のRDS(time_zoneはengine-default=UTC)と揃える。
+    # lib/db.tsのmysql2は'Z'で解釈するため、サーバ側もUTCでなければならない。
+    command: --default-time-zone='+00:00'
     environment:
-      TZ: Asia/Tokyo
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
