@@ -189,6 +189,12 @@ export class EcsStack extends cdk.Stack {
       }
     );
 
+    // テンプレートのイメージはpublic.ecr.awsのプレースホルダであり、CDKはECRの
+    // 権限を推論できない。実イメージはデプロイ用ワークフローがプライベートECRへ
+    // 差し替えるため、実行ロールにpull権限を明示的に与える。
+    // これが無いとタスク起動時にecr:GetAuthorizationTokenで失敗する。
+    backendRepo.grantPull(fastapiTaskDef.obtainExecutionRole());
+
     fastapiTaskDef.addVolume({
       name: 'chroma-volume',
       efsVolumeConfiguration: {
@@ -267,6 +273,9 @@ export class EcsStack extends cdk.Stack {
       memoryLimitMiB: 512,
       taskRole: nextjsTaskRole,
     });
+
+    // FastapiTaskDefと同じ理由でpull権限を与える
+    frontendRepo.grantPull(nextjsTaskDef.obtainExecutionRole());
 
     const nextjsContainer = nextjsTaskDef.addContainer('nextjs', {
       image: dummyImage,

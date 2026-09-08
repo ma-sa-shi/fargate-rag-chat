@@ -79,7 +79,7 @@ See `src/backend/services/rag/CLAUDE.md` for the state-accumulation contract (re
 - `init_db.py` — connects as the MySQL master user and creates the `<MYSQL_DATABASE>` and
   `<MYSQL_DATABASE>_test` databases, the application user and its grants, and the `users`,
   `docs`, `chat_histories`, `chat_details` tables. It runs on every backend start,
-  production included — the deploy workflow puts it in front of `uvicorn`.
+  production included — the image's `CMD` puts it in front of `uvicorn`.
 
 ### AWS Infrastructure (`cdk/`)
 

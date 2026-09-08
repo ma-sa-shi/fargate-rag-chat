@@ -64,3 +64,6 @@ RUN poetry install --only main --no-interaction --no-ansi --no-root
 COPY --chown=$USERNAME:$USER_GID src/backend/ /app/
 
 USER $USERNAME
+
+# init_db.pyでDBとテーブルを用意してからuvicornを起動する
+CMD ["sh", "-c", "poetry run python init_db.py && poetry run uvicorn main:app --host 0.0.0.0 --port 8000"]
