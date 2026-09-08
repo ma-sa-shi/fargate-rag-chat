@@ -24,8 +24,14 @@ export class IamStack extends cdk.Stack {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
         StringLike: {
-          // 自分のGitHubアカウントの特定のリポジトリのみに制限
-          'token.actions.githubusercontent.com:sub': 'repo:ma-sa-shi/fargate-rag-chat:*',
+          // 自分のGitHubアカウントの特定のリポジトリのみに制限する。
+          // GitHubが発行するsubはリポジトリ名ではなく、オーナーIDとリポジトリIDを
+          // 埋め込んだ repo:<owner>@<ownerId>/<repo>@<repoId>:<ref> の形式である。
+          // 実際の値は次で確認できる。
+          //   gh api repos/<owner>/<repo>/actions/oidc/customization/sub
+          // IDはリネームしても変わらないため、改名時にこの条件を直す必要はない。
+          'token.actions.githubusercontent.com:sub':
+            'repo:ma-sa-shi@265779122/fargate-rag-chat@1247357296:*',
         },
       }
     );
