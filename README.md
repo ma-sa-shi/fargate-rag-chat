@@ -1,51 +1,55 @@
 # 社内ナレッジ検索RAGアプリ
 
-社内ドキュメントを検索し、根拠となるドキュメントに基づいて回答するRAGチャットアプリ。ECS Fargate Spotとスケジュール停止を組み合わせ、常駐構成のまま運用コストを抑える。
+社内ドキュメントを検索し、その記載根拠に基づいて回答を生成する RAG チャットアプリです。ECS Fargate Spot とスケジュール停止（夜間・休日）を組み合わせることで、常駐構成ながら運用コストを大幅に削減しています。
 
 ## デモ
 
+https://github.com/user-attachments/assets/5617046a-c229-4914-a120-0a7c6836cfe1
+
 ## 背景と目的
 
-手順書や過去の案件資料といった社内ドキュメントは、蓄積が進むほど保管場所が分散し、どこに何があるかを把握しづらくなる。しかも在り処が分かっても、情報量が多ければ必要な情報を取り出すまでに時間が掛かる。
+手順書や過去の案件資料といった社内ドキュメントは、蓄積が進むにつれて保管場所が分散し、「どこに何があるかわからない」状態に陥りがちです。また、保管場所が分かっていても、ドキュメントの量が多いと必要な情報に辿り着くまでに時間がかかります。
 
-本アプリは、アップロードしたドキュメントを対象としたRAGチャットにより、必要な情報へ早くアクセスすることを目的とする。その際、生成した回答はLLM自身が評価し、根拠が不足していれば検索クエリを変えて再試行する。さらにチャット履歴は全ユーザーへ公開し、一度得られた回答をナレッジとして共有する。
+本アプリは、アップロードされたドキュメントを対象に RAG チャットを提供し、必要な情報へ素早くアクセスできるようにすることを目的としています。
+特徴として、生成された回答は LLM 自身が自動評価（Self-RAG）し、根拠が不足している場合は検索クエリを自動修正して再試行します。また、チャット履歴を全ユーザーに公開することで、得られた回答を組織のナレッジとして共有・活用できます。
 
 ## アーキテクチャ
 
 ![アプリ設計](./docs/diagrams/アプリ設計.svg)
 
-フロントエンドはNext.jsのApp Routerで構成する。認証とファイルアップロードはServer ActionsからMySQLとS3を直接操作し、チャットのみRoute Handlerが`/api/chats/stream`へプロキシしてSSEをそのまま流す。つまりFastAPIを経由しない経路があるため、フロントエンドは純粋なBFFではない。
+フロントエンドには Next.js（App Router）を採用しています。認証やファイルアップロードは Server Actions から MySQL / S3 を直接操作し、チャット通信のみ Route Handler（`/api/chat-stream`）を経由して SSE をストリーミング配信します。一部 FastAPI を経由しない経路があるため、完全な BFF 構成ではありません。
 
-認証はServer ActionsがMySQLの資格情報をargon2で検証し、JWTをhttpOnlyの`session_token`クッキーへ発行する。そのうえで、保護されたページはいずれも`getUserIdFromToken()`でこのクッキーを検証する。
+認証フローでは、Server Actions が MySQL の認証情報を argon2 で検証し、`session_token`（httpOnly クッキー）として JWT を発行します。認証が必要な各ページでは、`getUserIdFromToken()` を使用してこのクッキーを検証します。
 
 | サービス | 責務 | 実行構成 |
 |---|---|---|
 | rag-app-nextjs | 画面、認証、ファイルアップロード、SSEプロキシ | Fargate Spot / port 3000 / cloudflaredサイドカー |
-| rag-app-fastapi | Embedding生成とChroma登録、LangGraphによるSelf-RAGの実行とSSE配信 | Fargate Spot / port 8000 / EFSマウント |
+| rag-app-fastapi | Embedding生成・Chroma登録、LangGraphによるSelf-RAG実行・SSE配信 | Fargate Spot / port 8000 / EFSマウント |
 
-公開経路にALBは使わない。Next.jsタスク内の`cloudflared`サイドカーがアウトバウンドのトンネルを確立するため、インバウンドポートを開けずに公開でき、ALBの固定費も発生しない。また2つのサービスは平日9時から19時(JST)のみ稼働し、時間外はタスク数0へスケールする。
+パブリックアクセスには ALB を使用せず、Next.js タスク内の `cloudflared` サイドカーからアウトバウンドのトンネルを確立しています。これにより、インバウンドポートを開放することなく安全に公開でき、ALB の固定費も削減できます。また、2つのサービスは平日 9:00〜19:00（JST）のみ起動し、時間外はタスク数を 0 にスケールダウンします。
 
 ### ドキュメント取込
 
 ![取込パイプライン](./docs/diagrams/取込パイプライン.svg)
 
-アップロードと取込は分離している。アップロード時点ではファイル本体とテキストを保存するだけで、Embedding生成はユーザーが取込を実行したときに開始する。これに伴いドキュメントのステータスは`uploaded → processing → ingested | failed`と遷移する。取込では抽出済みテキストを500文字・オーバーラップ50で分割し、OpenAIのEmbeddingを生成してChromaへ登録する。
+ファイルアップロードと取込処理は分離されています。アップロード時点ではファイル本体と抽出テキストの保存のみを行い、Embedding の生成はユーザーが「取込」を実行したタイミングで開始されます。これに伴い、ステータスは `uploaded → processing → ingested | failed` と遷移します。
+取込処理では、抽出済みテキストを 500 文字単位（オーバーラップ 50 文字）で分割し、OpenAI で Embedding を生成して Chroma へ登録します。
 
 ### 回答生成
 
 ![RAGパイプライン](./docs/diagrams/RAGパイプライン.svg)
 
-回答生成はSelf-RAGで行う。Multi Query、ベクトル検索、RRFによる統合、Cohere Rerank、回答生成、自己評価、最大1回のリトライという流れをLangGraphのStateGraphで構成している。
+回答生成には Self-RAG アーキテクチャを採用しています。Multi Query 生成、ベクトル検索、RRF（Reciprocal Rank Fusion）による統合、Cohere Rerank、回答生成、自己評価、最大1回のリトライという一連の流れを LangGraphで構築しています。
 
-自己評価が`useless`または`hallucination`であればフィードバックを添えてクエリ生成へ戻り、リトライ後も改善しなければ失敗分析を生成して終了する。そのため試行ごとのクエリ・検索結果・回答・評価は`chat_details`に1行ずつ保存し、後から失敗を追跡できるようにしている。
+自己評価で `useless` または `hallucination` と判定された場合は、フィードバックを伴ってクエリ再生成へと戻ります。リトライ後も改善しない場合は、失敗原因の分析結果を出力して終了します。なお、試行ごとのクエリ・検索結果・回答・評価結果は `chat_details` に1行ずつ記録され、後から失敗要因を追跡できる設計にしています。
 
 ### CI/CD
 
 ![CICD](./docs/diagrams/CICD.svg)
 
-GitHub ActionsのAWS認証はOIDCで行い、長期アクセスキーを持たせない。そのうえでプルリクエストではlintとテストのみをパスフィルタ付きで実行し、デプロイはインフラ・バックエンド・フロントエンドとも`workflow_dispatch`による手動実行とする。
+GitHub Actions と AWS 間の認証には OIDC を使用し、長期アクセスキーを持たせない設計としています。プルリクエスト時には、変更のあったパスに対してのみ lint とテストを実行します。デプロイ処理は、インフラ・バックエンド・フロントエンドともに `workflow_dispatch` による手動実行としています。
 
-インフラ構成の詳細は[cdk/README.md](./cdk/README.md)に記載する。
+インフラ構成の詳細は[cdk/README.md](./cdk/README.md)に記載しました。
 
 ## 技術スタック
 
@@ -63,11 +67,12 @@ GitHub ActionsのAWS認証はOIDCで行い、長期アクセスキーを持た�
 
 | ADR | 判断と理由 |
 |---|---|
-| [001 コンピュート構成の選定](./docs/adr/001-compute-architecture.md) | ECS Fargate Spotの常駐構成を採用し、平日9時から19時のスケジュール起動で常時コストを抑える |
+| [001 コンピュート構成の選定](./docs/adr/001-compute-architecture.md) | ECS Fargate Spot の常駐構成を採用。平日 9:00〜19:00 のスケジュール運用によりコストを最適化。 |
 
-ECS Fargate Spot(A案)、コンテナイメージLambdaへの移植(B案)、VPC外Lambda + DynamoDB + S3 Vectorsへの再設計(C案)の3案を比較した。
+検討にあたっては、ECS Fargate Spot（A案）、コンテナイメージ版 Lambda への移植（B案）、VPC 外 Lambda + DynamoDB + S3 Vectors への再設計（C案）の 3 案を比較しました。
 
-このうちB案は、Chroma(SQLiteバックエンド)が同時実行数の制限を強いること、egress用のNATインスタンスが自前運用かつ単一障害点になることから見送った。一方C案は、約14,400チャット/月を下回る利用量ではA案より低コストとなる。ただしデータ層の移行コストを踏まえ、現時点ではA案を採用した。
+B 案は、Chroma（SQLite バックエンド）の同時実行数制限と、egress 用 NAT インスタンスの自前運用による SPOF（単一障害点）化のリスクから採用を見送りました。
+C 案は、月間約 14,400 チャット未満の利用規模であれば A 案より低コストになりますが、データ層の移行コストを総合的に考慮し、現時点では A 案を採用しています。
 
 ## ローカル実行
 
@@ -76,54 +81,54 @@ cp .env.example .env   # OpenAI / Cohere のAPIキーなどを設定する
 docker compose up --build
 ```
 
-`backend`・`frontend`・`rdb`の3サービスが起動する。このうち`backend`は起動時に`init_db.py`を実行し、アプリ用とテスト用のデータベースとテーブルを作成する。
+`backend`・`frontend`・`rdb` の 3 サービスが起動します。`backend` は起動時に `init_db.py` を実行し、アプリケーション用およびテスト用のデータベース／テーブルを自動作成します。
 
 - フロントエンド: `http://localhost:3000`
 - バックエンドAPI: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
 
-起動確認は`/api/system/health`、`/api/system/db-test`、`/api/system/chroma-test`で行う。いずれも`{"status":"success"}`を返せば起動は完了している。なお`chroma-test`は検索クエリのEmbedding生成を伴うため、OpenAIのAPIキーもここで検証される。ただしCohereのキーは、チャットを実行するまで検証されない。
+起動確認は `/api/system/health`、`/api/system/db-test`、`/api/system/chroma-test` で行えます。すべて `{"status":"success"}` が返れば正常に起動しています。なお、`chroma-test` は検索クエリの Embedding 生成を行うため OpenAI API キーの検証を兼ねています（Cohere の API キーはチャット実行時まで検証されません）。
 
-静的解析はホストで実行する。
+静的解析はホストで実行します。
 
 ```bash
 (cd src/backend && poetry run ruff check . && poetry run ruff format --check .)
 (cd src/frontend && npm run lint && npm run format:check)
 ```
 
-テストは`backend`コンテナの中で実行する。ホストからでは`src/backend`が`sys.path`に載らず、`MYSQL_HOST=rdb`も解決できない。
+テストは `backend` コンテナ内で実行してください。ホスト側からは `src/backend` が `sys.path` に含まれず、`MYSQL_HOST=rdb` の名前解決も行えないためです。
 
 ```bash
 docker compose exec -e PYTHONPATH=. backend poetry run pytest
 ```
 
-`tests/test_documents.py`と`tests/test_chats.py`が取込からチャットまでを通しで検証する。モックを使わないため、実際のOpenAI/CohereのAPIキーと`<MYSQL_DATABASE>_test`データベースが必要になる。フロントエンドにテストフレームワークは導入していない。
+`tests/test_documents.py` と `tests/test_chats.py` で、取込からチャット処理までの一連の流れを検証します。モックを使用しないため、有効な OpenAI / Cohere の API キーと `<MYSQL_DATABASE>_test` データベースが必要です。なお、フロントエンド側のテストフレームワークは導入していません。
 
-CDKは`cd cdk && npm ci`を一度実行したうえで`npm run diff` / `npm run deploy`を使う。CDKのテストは雛形のまま未実装のため、変更の安全確認は`npm run diff`で行う。
+CDK の操作は、`cd cdk && npm ci` を事前に実行してから `npm run diff` / `npm run deploy` を使用します。CDK の自動テストは未実装のため、変更内容は `npm run diff` で事前に確認してください。
 
 ## リポジトリ構成
 
 ```text
 src/
-  frontend/           Next.js。画面、認証、アップロード、SSEプロキシ
-  backend/            FastAPI。取込APIとSelf-RAGのLangGraphワークフロー
-cdk/                  CDK。VpcStack / EfsStack / RdsStack / S3Stack / EcsStack / IamStack
+  frontend/           Next.js（画面、認証、アップロード、SSE プロキシ）
+  backend/            FastAPI（取込 API、Self-RAG の LangGraph ワークフロー）
+cdk/                  CDK（VpcStack / EfsStack / RdsStack / S3Stack / EcsStack / IamStack）
 docs/
-  adr/                アーキテクチャ決定記録
-  diagrams/           構成図(architecture.drawioが原本、各ページをSVGへ書き出す)
-.github/workflows/    PR検証とデプロイ
+  adr/                アーキテクチャ決定記録（ADR）
+  diagrams/           構成図（architecture.drawio が原本、各ページを SVG 変換）
+.github/workflows/    PR 検証・デプロイ用ワークフロー
 ```
 
 ## 今後の課題
 
-**1. サーバーレス構成への段階移行**
+**1. サーバーレス構成への段階的移行**
 
-現在の常駐構成は、利用のない時間帯を止めてもRDSとEFSの固定費が残る。そこでベクトル層、ドキュメント取込の非同期化、データ層、コンピュートとingressの4段階に分け、各段階が単独でデプロイ・後戻りできる形で移行する。詳細は[ADR 001](./docs/adr/001-compute-architecture.md)に記載する。
+現在の常駐構成では、夜間や休日にコンテナを停止しても RDS や EFS の固定費が発生します。そのため、「ベクトル層」「ドキュメント取込の非同期化」「データ層」「コンピュート・Ingress」の 4 段階に分け、各段階で個別にデプロイ・切り戻しが可能な形でサーバーレス化を進めます（詳細は [ADR 001](./docs/adr/001-compute-architecture.md) を参照）。
 
-**2. 対話の継続**
+**2. マルチターン対話（継続的な対話）への対応**
 
-現在は1問1答で、各質問を独立して処理している。そのため生成された回答に対してさらに質問を重ねられるよう、履歴を文脈として扱う仕組みを追加する。
+現状は 1 問 1 答形式で各質問を独立して処理しています。生成された回答に対してさらに深掘りした質問ができるよう、過去のチャット履歴をコンテキストとして保持・活用する仕組みを追加します。
 
-**3. Text-to-SQLによる付加価値の追加**
+**3. Text-to-SQL によるデータ活用機能の追加**
 
-SQLに精通していないユーザーでも必要な情報にアクセスできるよう、自然言語からSQLを生成・実行してリレーショナルデータベースから回答を組み立てる機能を追加する。
+SQL の知識がないユーザーでも社内データにアクセスできるよう、自然言語から SQL を生成・実行し、リレーショナルデータベースの情報から回答を組み立てる機能の追加を検討しています。
